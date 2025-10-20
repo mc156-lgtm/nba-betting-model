@@ -355,9 +355,13 @@ def calculate_edge(prediction, market_line, bet_type='spread'):
     """
     if bet_type == 'spread':
         edge = abs(prediction - market_line)
-        # If model predicts home wins by MORE than market line, bet home
-        # If model predicts home wins by LESS than market line, bet away
-        if prediction > market_line:
+        # Compare absolute values to determine bet
+        # prediction is home margin (positive = home wins)
+        # market_line is home spread (negative = home favored)
+        # If model predicts home wins by more than market expects, bet home
+        # Example: Model +10, Market -7 -> bet home (10 > 7)
+        # Example: Model +4, Market -7 -> bet away (4 < 7)
+        if abs(prediction) > abs(market_line):
             # Model thinks home will beat the spread
             recommendation = f"Bet HOME {market_line:+.1f}"
         else:
