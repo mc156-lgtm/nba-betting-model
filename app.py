@@ -100,6 +100,13 @@ try:
 except:
     TRACKING_AVAILABLE = False
 
+# Import schedule fetching
+try:
+    from data_collection.fetch_schedule import get_schedule_for_date, get_todays_games as get_schedule_today, get_tomorrows_games
+    SCHEDULE_API_AVAILABLE = True
+except:
+    SCHEDULE_API_AVAILABLE = False
+
 # Modern NBA Adjustments (based on 2024-25 season testing)
 MODERN_NBA_ADJUSTMENTS = {
     'totals': 10.8,  # Add to totals predictions (modern NBA scores more)
@@ -395,22 +402,18 @@ def show_best_bets(models, selected_date):
     
     # Fetch games and odds
     with st.spinner("Analyzing all games for best betting opportunities..."):
-        # Get games for selected date
-        if selected_date.date() == datetime.now().date():
+        # Get games for selected date using fetch_schedule module
+        if SCHEDULE_API_AVAILABLE:
+            games = get_schedule_for_date(selected_date)
+        elif selected_date.date() == datetime.now().date():
             games = get_todays_games()
         else:
-            # For future dates, we don't have live schedule yet
             games = []
         
         # Get live odds
         odds_df = get_live_odds()
     
-    if not games and not odds_df is not None:
-        st.warning("⚠️ No games found for selected date")
-        st.info("💡 The NBA API only provides today's schedule. For tomorrow's games, check back later or use the 'Game Predictions' tab for custom matchups.")
-        return
-    
-    # If we have odds but no games from API, extract games from odds
+    # If no games from schedule API, try to extract from odds
     if not games and odds_df is not None and len(odds_df) > 0:
         st.info("📊 Using games from odds data")
         games = []
@@ -423,7 +426,8 @@ def show_best_bets(models, selected_date):
             })
     
     if not games:
-        st.warning("⚠️ No games available for analysis")
+        st.warning("⚠️ No games found for selected date")
+        st.info("💡 No games available in the schedule or odds data for this date.")
         return
     
     # Calculate edges for all bets
