@@ -559,6 +559,8 @@ def show_best_bets(models, selected_date):
             
             all_bets.append({
                 'game': f"{away_team} @ {home_team}",
+                'home_team': home_team,
+                'away_team': away_team,
                 'game_time': game_time,
                 'bet_type': 'Spread',
                 'recommendation': spread_edge['recommendation'],
@@ -578,6 +580,8 @@ def show_best_bets(models, selected_date):
             )
             all_bets.append({
                 'game': f"{away_team} @ {home_team}",
+                'home_team': home_team,
+                'away_team': away_team,
                 'game_time': game_time,
                 'bet_type': 'Total',
                 'recommendation': total_edge['recommendation'],
@@ -597,6 +601,8 @@ def show_best_bets(models, selected_date):
             )
             all_bets.append({
                 'game': f"{away_team} @ {home_team}",
+                'home_team': home_team,
+                'away_team': away_team,
                 'game_time': game_time,
                 'bet_type': 'Moneyline',
                 'recommendation': ml_edge['recommendation'],
@@ -855,7 +861,13 @@ def show_best_bets(models, selected_date):
                 elif bet['ev_percent'] > 2:
                     st.warning("⚖️ **SLIGHT EDGE**")
                 
-                st.markdown(f"**What to bet:** {bet['recommendation']}")
+                # Replace HOME/AWAY with actual team names in recommendation
+                rec_display = bet['recommendation']
+                if 'HOME' in rec_display and bet.get('home_team'):
+                    rec_display = rec_display.replace('HOME', bet['home_team'])
+                if 'AWAY' in rec_display and bet.get('away_team'):
+                    rec_display = rec_display.replace('AWAY', bet['away_team'])
+                st.markdown(f"**What to bet:** {rec_display}")
         
         st.markdown("---")
     
