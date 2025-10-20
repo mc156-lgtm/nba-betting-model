@@ -355,10 +355,14 @@ def calculate_edge(prediction, market_line, bet_type='spread'):
     """
     if bet_type == 'spread':
         edge = abs(prediction - market_line)
-        if prediction < market_line:
-            recommendation = f"Bet AWAY +{abs(market_line):.1f}"
-        else:
+        # If model predicts home wins by MORE than market line, bet home
+        # If model predicts home wins by LESS than market line, bet away
+        if prediction > market_line:
+            # Model thinks home will beat the spread
             recommendation = f"Bet HOME {market_line:+.1f}"
+        else:
+            # Model thinks away will cover the spread
+            recommendation = f"Bet AWAY +{abs(market_line):.1f}"
         ev_pct = (edge / abs(market_line)) * 100 if market_line != 0 else 0
         
     elif bet_type == 'total':
@@ -607,6 +611,14 @@ def show_best_bets(models, selected_date):
     if not all_bets:
         st.warning("⚠️ No betting opportunities found. Live odds may not be available yet.")
         st.info("💡 Use the 'Game Predictions' tab to analyze specific matchups manually.")
+        return
+    
+    # Filter out negative EV bets (bad bets)
+    all_bets = [bet for bet in all_bets if bet['ev_percent'] > 0]
+    
+    if not all_bets:
+        st.warning("⚠️ No positive EV betting opportunities found.")
+        st.info("💡 All available bets have negative expected value. Wait for better opportunities.")
         return
     
     # Sort by EV%
