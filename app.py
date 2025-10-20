@@ -402,32 +402,43 @@ def show_best_bets(models, selected_date):
     
     # Fetch games and odds
     with st.spinner("Analyzing all games for best betting opportunities..."):
-        # Get games for selected date using fetch_schedule module
-        if SCHEDULE_API_AVAILABLE:
-            games = get_schedule_for_date(selected_date)
-        elif selected_date.date() == datetime.now().date():
-            games = get_todays_games()
-        else:
-            games = []
-        
-        # Get live odds
+        # Get live odds first (this is our primary data source)
         odds_df = get_live_odds()
-    
-    # If no games from schedule API, try to extract from odds
-    if not games and odds_df is not None and len(odds_df) > 0:
-        st.info("📊 Using games from odds data")
+        
+        # Try to get games from schedule API
         games = []
-        for _, row in odds_df.iterrows():
-            games.append({
-                'home_team': row.get('home_team', 'UNK'),
-                'away_team': row.get('away_team', 'UNK'),
-                'home_team_name': row.get('home_team', 'Unknown'),
-                'away_team_name': row.get('away_team', 'Unknown'),
-            })
+        if SCHEDULE_API_AVAILABLE:
+            try:
+                games = get_schedule_for_date(selected_date)
+            except Exception as e:
+                st.warning(f"⚠️ Schedule API error: {e}")
+        
+        # If no games from schedule, extract from odds data
+        if not games and odds_df is not None and len(odds_df) > 0:
+            st.info(f"📊 Found {len(odds_df)} games in odds data")
+            # Get unique games from odds
+            seen_games = set()
+            for _, row in odds_df.iterrows():
+                game_key = (row.get('home_team'), row.get('away_team'))
+                if game_key not in seen_games:
+                    seen_games.add(game_key)
+                    games.append({
+                        'home_team': row.get('home_team', 'UNK'),
+                        'away_team': row.get('away_team', 'UNK'),
+                        'home_team_name': row.get('home_team', 'Unknown'),
+                        'away_team_name': row.get('away_team', 'Unknown'),
+                    })
+    
+    # Debug info
+    if odds_df is not None:
+        st.info(f"📈 Odds data: {len(odds_df)} rows, {len(games)} unique games")
     
     if not games:
         st.warning("⚠️ No games found for selected date")
-        st.info("💡 No games available in the schedule or odds data for this date.")
+        if odds_df is None:
+            st.error("❌ Odds API returned no data. Check API key and credits.")
+        else:
+            st.info(f"💡 Odds data has {len(odds_df)} rows but no games extracted.")
         return
     
     # Calculate edges for all bets
