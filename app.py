@@ -356,9 +356,9 @@ def calculate_edge(prediction, market_line, bet_type='spread'):
     if bet_type == 'spread':
         edge = abs(prediction - market_line)
         if prediction < market_line:
-            recommendation = f"Bet AWAY +{market_line}"
+            recommendation = f"Bet AWAY +{abs(market_line):.1f}"
         else:
-            recommendation = f"Bet HOME -{market_line}"
+            recommendation = f"Bet HOME {market_line:+.1f}"
         ev_pct = (edge / abs(market_line)) * 100 if market_line != 0 else 0
         
     elif bet_type == 'total':
@@ -548,8 +548,14 @@ def show_best_bets(models, selected_date):
                 market_spread,
                 'spread'
             )
+            # Get game time from odds
+            game_time = None
+            if len(game_odds) > 0:
+                game_time = game_odds.iloc[0].get('commence_time', '')
+            
             all_bets.append({
                 'game': f"{away_team} @ {home_team}",
+                'game_time': game_time,
                 'bet_type': 'Spread',
                 'recommendation': spread_edge['recommendation'],
                 'your_prediction': f"{predictions['spread']:+.1f}",
@@ -560,7 +566,7 @@ def show_best_bets(models, selected_date):
                 'sharp_line': f"{pinnacle_spread:+.1f}" if pinnacle_spread else "N/A"
             })
         
-        if market_total is not None:
+        if market_total is not None and not pd.isna(market_total):
             total_edge = calculate_edge(
                 predictions['total'],
                 market_total,
@@ -568,6 +574,7 @@ def show_best_bets(models, selected_date):
             )
             all_bets.append({
                 'game': f"{away_team} @ {home_team}",
+                'game_time': game_time,
                 'bet_type': 'Total',
                 'recommendation': total_edge['recommendation'],
                 'your_prediction': f"{predictions['total']:.1f}",
@@ -586,6 +593,7 @@ def show_best_bets(models, selected_date):
             )
             all_bets.append({
                 'game': f"{away_team} @ {home_team}",
+                'game_time': game_time,
                 'bet_type': 'Moneyline',
                 'recommendation': ml_edge['recommendation'],
                 'your_prediction': f"{predictions['home_win_prob']:.1f}%",
@@ -631,33 +639,104 @@ def show_best_bets(models, selected_date):
     # Show top 10
     for i, bet in enumerate(all_bets[:10], 1):
         stars_display = bet['stars'] if bet['stars'] else '⚪'
-        with st.expander(f"{stars_display} #{i}: {bet['recommendation']} - {bet['game']}", expanded=i<=3):
+        # Parse game info
+        game_parts = bet["game"].split(" @ ")
+        away = game_parts[0] if len(game_parts) > 0 else ""
+        home = game_parts[1] if len(game_parts) > 1 else ""
+        
+        # Parse recommendation to get team name
+        rec = bet["recommendation"]
+        if "HOME" in rec:
+            team_to_bet = home
+        elif "AWAY" in rec:
+            team_to_bet = away
+        elif "OVER" in rec:
+            team_to_bet = "OVER"
+        elif "UNDER" in rec:
+            team_to_bet = "UNDER"
+        else:
+            team_to_bet = rec
+        
+        # Format game time
+        game_time_str = ""
+        if bet.get("game_time"):
+            from datetime import datetime
+            try:
+                gt = datetime.fromisoformat(bet["game_time"].replace("Z", "+00:00"))
+                game_time_str = f" - {gt.strftime('%b %d, %I:%M %p ET')}"
+            except:
+                pass
+        
+        # Parse game info
+        game_parts = bet["game"].split(" @ ")
+        away = game_parts[0] if len(game_parts) > 0 else ""
+        home = game_parts[1] if len(game_parts) > 1 else ""
+        
+        # Parse recommendation to get team name
+        rec = bet["recommendation"]
+        if "HOME" in rec:
+            team_to_bet = home
+        elif "AWAY" in rec:
+            team_to_bet = away
+        elif "OVER" in rec:
+            team_to_bet = "OVER"
+        elif "UNDER" in rec:
+            team_to_bet = "UNDER"
+        else:
+            team_to_bet = rec
+        
+        # Format game time
+        game_time_str = ""
+        if bet.get("game_time"):
+            from datetime import datetime
+            try:
+                gt = datetime.fromisoformat(bet["game_time"].replace("Z", "+00:00"))
+                game_time_str = f" - {gt.strftime('%b %d, %I:%M %p ET')}"
+            except:
+                pass
+        
+        with st.expander(f"{stars_display} #{i}: Bet {team_to_bet} {bet['bet_type']} - {bet['game']}{game_time_str}", expanded=i<=3):
             col1, col2, col3, col4, col5 = st.columns(5)
             
             with col1:
-                st.metric("Expected Value", f"+{bet['ev_percent']:.1f}%")
+                st.metric("Expected Value (EV%)", f"+{bet['ev_percent']:.1f}%")
             
             with col2:
-                st.metric("Edge", f"{bet['edge']:.1f}")
+                if bet['bet_type'] == 'Spread':
+                    st.metric("Point Difference", f"{bet['edge']:.1f} pts")
+                elif bet['bet_type'] == 'Total':
+                    st.metric("Point Difference", f"{bet['edge']:.1f} pts")
+                else:
+                    st.metric("Edge", f"{bet['edge']:.1f}%")
             
             with col3:
-                st.metric("Your Prediction", bet['your_prediction'])
+                st.metric("Model Prediction", bet['your_prediction'])
             
             with col4:
                 st.metric("Market Line", bet['market_line'])
             
             with col5:
-                st.metric("Sharp Line (Pinnacle)", bet['sharp_line'])
+                st.metric("Pinnacle (Sharp)", bet['sharp_line'])
             
-            # Explanation
+            # Clear explanation
+            st.markdown("---")
             if bet['ev_percent'] > 10:
-                st.success("🔥 **STRONG VALUE** - High confidence bet")
+                st.success("🔥 **STRONG VALUE BET** - Model sees significant edge over market")
             elif bet['ev_percent'] > 5:
-                st.info("💡 **GOOD VALUE** - Solid betting opportunity")
+                st.info("💡 **GOOD VALUE BET** - Solid betting opportunity")
             elif bet['ev_percent'] > 2:
-                st.warning("⚖️ **SLIGHT EDGE** - Marginal value")
+                st.warning("⚖️ **SLIGHT EDGE** - Small advantage, bet with caution")
             else:
                 st.error("❌ **NO EDGE** - Pass on this bet")
+            
+            # Add explanation of what to do
+            st.markdown(f"**What to bet:** {bet['recommendation']}")
+            if bet['bet_type'] == 'Spread':
+                st.caption(f"Model predicts {bet['your_prediction']} point spread, market offers {bet['market_line']}. Difference: {bet['edge']:.1f} points.")
+            elif bet['bet_type'] == 'Total':
+                st.caption(f"Model predicts {bet['your_prediction']} total points, market offers {bet['market_line']}. Difference: {bet['edge']:.1f} points.")
+            else:
+                st.caption(f"Model gives {bet['your_prediction']} win probability, market implies {100-bet['edge']:.1f}%.")
     
     # Show all bets table
     st.markdown("---")
