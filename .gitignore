@@ -46,3 +46,4 @@ Thumbs.db
 # Logs
 *.log
 
+data/raw/nba_hallmark/
