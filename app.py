@@ -632,11 +632,28 @@ def show_best_bets(models, selected_date):
     
     st.markdown("---")
     
-    # Display top bets
-    st.markdown("### 🎯 Top Betting Opportunities")
-    st.markdown("*Ranked by Expected Value (EV%)*")
+    # Group bets by date
+    from datetime import datetime
+    from collections import defaultdict
     
-    # Show top 10
+    bets_by_date = defaultdict(list)
+    for bet in all_bets:
+        if bet.get('game_time'):
+            try:
+                gt = datetime.fromisoformat(bet['game_time'].replace('Z', '+00:00'))
+                date_key = gt.strftime('%A, %B %d, %Y')
+            except:
+                date_key = 'Unknown Date'
+        else:
+            date_key = 'Unknown Date'
+        bets_by_date[date_key].append(bet)
+    
+    # Display top bets grouped by date
+    st.markdown("### 🎯 Top Betting Opportunities")
+    st.markdown("*Ranked by Expected Value (EV%) and grouped by game date*")
+    
+    # Show top 10 overall first
+    st.markdown("#### 🏆 Top 10 Best Bets (All Games)")
     for i, bet in enumerate(all_bets[:10], 1):
         stars_display = bet['stars'] if bet['stars'] else '⚪'
         # Parse game info
@@ -738,9 +755,82 @@ def show_best_bets(models, selected_date):
             else:
                 st.caption(f"Model gives {bet['your_prediction']} win probability, market implies {100-bet['edge']:.1f}%.")
     
-    # Show all bets table
+    # Show all bets grouped by date
     st.markdown("---")
-    st.markdown("### 📊 All Betting Opportunities")
+    st.markdown("### 📅 All Bets by Game Date")
+    
+    for date_key in sorted(bets_by_date.keys()):
+        st.markdown(f"#### {date_key}")
+        date_bets = bets_by_date[date_key]
+        st.info(f"📊 {len(date_bets)} betting opportunities")
+        
+        for i, bet in enumerate(date_bets, 1):
+            stars_display = bet['stars'] if bet['stars'] else '⚪'
+            
+            # Parse game info
+            game_parts = bet["game"].split(" @ ")
+            away = game_parts[0] if len(game_parts) > 0 else ""
+            home = game_parts[1] if len(game_parts) > 1 else ""
+            
+            # Parse recommendation to get team name
+            rec = bet["recommendation"]
+            if "HOME" in rec:
+                team_to_bet = home
+            elif "AWAY" in rec:
+                team_to_bet = away
+            elif "OVER" in rec:
+                team_to_bet = "OVER"
+            elif "UNDER" in rec:
+                team_to_bet = "UNDER"
+            else:
+                team_to_bet = rec
+            
+            # Format game time
+            game_time_str = ""
+            if bet.get("game_time"):
+                try:
+                    gt = datetime.fromisoformat(bet["game_time"].replace("Z", "+00:00"))
+                    game_time_str = f" - {gt.strftime('%I:%M %p ET')}"
+                except:
+                    pass
+            
+            with st.expander(f"{stars_display} Bet {team_to_bet} {bet['bet_type']} - {bet['game']}{game_time_str}", expanded=False):
+                col1, col2, col3, col4, col5 = st.columns(5)
+                
+                with col1:
+                    st.metric("Expected Value (EV%)", f"+{bet['ev_percent']:.1f}%")
+                
+                with col2:
+                    if bet['bet_type'] == 'Spread':
+                        st.metric("Point Difference", f"{bet['edge']:.1f} pts")
+                    elif bet['bet_type'] == 'Total':
+                        st.metric("Point Difference", f"{bet['edge']:.1f} pts")
+                    else:
+                        st.metric("Edge", f"{bet['edge']:.1f}%")
+                
+                with col3:
+                    st.metric("Model Prediction", bet['your_prediction'])
+                
+                with col4:
+                    st.metric("Market Line", bet['market_line'])
+                
+                with col5:
+                    st.metric("Pinnacle (Sharp)", bet['sharp_line'])
+                
+                st.markdown("---")
+                if bet['ev_percent'] > 10:
+                    st.success("🔥 **STRONG VALUE BET**")
+                elif bet['ev_percent'] > 5:
+                    st.info("💡 **GOOD VALUE BET**")
+                elif bet['ev_percent'] > 2:
+                    st.warning("⚖️ **SLIGHT EDGE**")
+                
+                st.markdown(f"**What to bet:** {bet['recommendation']}")
+        
+        st.markdown("---")
+    
+    # Show all bets table
+    st.markdown("### 📊 All Betting Opportunities (Table View)")
     
     df = pd.DataFrame(all_bets)
     df = df[['stars', 'game', 'bet_type', 'recommendation', 'ev_percent', 'edge', 'your_prediction', 'market_line', 'sharp_line']]
