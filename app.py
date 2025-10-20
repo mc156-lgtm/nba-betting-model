@@ -636,17 +636,35 @@ def show_best_bets(models, selected_date):
     from datetime import datetime
     from collections import defaultdict
     
-    bets_by_date = defaultdict(list)
+    bets_by_date = {}  # Use dict to maintain insertion order
+    date_objects = {}  # Store datetime objects for sorting
+    
     for bet in all_bets:
         if bet.get('game_time'):
             try:
                 gt = datetime.fromisoformat(bet['game_time'].replace('Z', '+00:00'))
                 date_key = gt.strftime('%A, %B %d, %Y')
+                if date_key not in bets_by_date:
+                    bets_by_date[date_key] = []
+                    date_objects[date_key] = gt.date()
+                bets_by_date[date_key].append(bet)
             except:
                 date_key = 'Unknown Date'
+                if date_key not in bets_by_date:
+                    bets_by_date[date_key] = []
+                bets_by_date[date_key].append(bet)
         else:
             date_key = 'Unknown Date'
-        bets_by_date[date_key].append(bet)
+            if date_key not in bets_by_date:
+                bets_by_date[date_key] = []
+            bets_by_date[date_key].append(bet)
+    
+    # Sort dates chronologically
+    sorted_dates = sorted([d for d in bets_by_date.keys() if d in date_objects], 
+                         key=lambda x: date_objects[x])
+    # Add unknown dates at the end
+    if 'Unknown Date' in bets_by_date:
+        sorted_dates.append('Unknown Date')
     
     # Display top bets grouped by date
     st.markdown("### 🎯 Top Betting Opportunities")
@@ -759,7 +777,7 @@ def show_best_bets(models, selected_date):
     st.markdown("---")
     st.markdown("### 📅 All Bets by Game Date")
     
-    for date_key in sorted(bets_by_date.keys()):
+    for date_key in sorted_dates:
         st.markdown(f"#### {date_key}")
         date_bets = bets_by_date[date_key]
         st.info(f"📊 {len(date_bets)} betting opportunities")
