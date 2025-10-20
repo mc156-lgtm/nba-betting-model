@@ -57,12 +57,19 @@ def get_schedule_for_date(target_date):
         
         odds_data = fetch_nba_odds(use_cache=True)
         if odds_data:
-            # Filter games by date
+            # Filter games by date (convert UTC to local time for comparison)
+            from datetime import timezone
+            
             for game in odds_data:
-                game_time = datetime.fromisoformat(game['commence_time'].replace('Z', '+00:00'))
+                game_time_utc = datetime.fromisoformat(game['commence_time'].replace('Z', '+00:00'))
+                # Convert to local time for date comparison
+                game_time_local = game_time_utc.astimezone()
                 
-                # Check if game is on target date (UTC)
-                if game_time.date() == target_date.date():
+                # Check if game is on target date (local time)
+                # Allow games from target date or within 12 hours before/after
+                time_diff = abs((game_time_local.date() - target_date.date()).days)
+                
+                if time_diff <= 1:  # Include games within 1 day
                     games.append({
                         'game_id': game['id'],
                         'game_time': game['commence_time'],
