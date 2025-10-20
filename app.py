@@ -171,25 +171,75 @@ def get_todays_games():
 
 @st.cache_data(ttl=21600)  # Cache for 6 hours
 def get_live_odds():
-    """Fetch live odds from The Odds API"""
-    if not ODDS_API_AVAILABLE:
-        st.error("❌ Odds API module not available")
-        return None
+    """Fetch live odds from The Odds API - Simple direct implementation"""
+    import requests
+    
+    API_KEY = "d082b1e452e4604434d17c71edc92255"
+    url = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds/"
+    
+    params = {
+        'apiKey': API_KEY,
+        'regions': 'us',
+        'markets': 'h2h,spreads,totals',
+        'bookmakers': 'fanduel,draftkings,pinnacle',
+        'oddsFormat': 'american',
+        'dateFormat': 'iso'
+    }
     
     try:
-        odds_data = fetch_nba_odds(use_cache=True)
-        if odds_data:
-            st.success(f"✅ Fetched {len(odds_data)} games from Odds API")
-            df = parse_odds_data(odds_data)
-            st.info(f"📊 Parsed into {len(df)} rows")
-            return df
-        else:
-            st.error("❌ Odds API returned empty data")
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        odds_data = response.json()
+        
+        if not odds_data:
             return None
+        
+        # Parse into simple dataframe
+        games = []
+        for game in odds_data:
+            game_dict = {
+                'game_id': game['id'],
+                'commence_time': game['commence_time'],
+                'home_team': game['home_team'],
+                'away_team': game['away_team']
+            }
+            
+            # Extract odds from bookmakers
+            for bookmaker in game.get('bookmakers', []):
+                bookie = bookmaker['key']
+                for market in bookmaker.get('markets', []):
+                    market_key = market['key']
+                    
+                    if market_key == 'h2h':
+                        for outcome in market['outcomes']:
+                            if outcome['name'] == game['home_team']:
+                                game_dict[f'{bookie}_ml_home'] = outcome['price']
+                            else:
+                                game_dict[f'{bookie}_ml_away'] = outcome['price']
+                    
+                    elif market_key == 'spreads':
+                        for outcome in market['outcomes']:
+                            if outcome['name'] == game['home_team']:
+                                game_dict[f'{bookie}_spread_home'] = outcome['point']
+                                game_dict[f'{bookie}_spread_home_odds'] = outcome['price']
+                            else:
+                                game_dict[f'{bookie}_spread_away'] = outcome['point']
+                                game_dict[f'{bookie}_spread_away_odds'] = outcome['price']
+                    
+                    elif market_key == 'totals':
+                        for outcome in market['outcomes']:
+                            if outcome['name'] == 'Over':
+                                game_dict[f'{bookie}_total_line'] = outcome['point']
+                                game_dict[f'{bookie}_total_over_odds'] = outcome['price']
+                            else:
+                                game_dict[f'{bookie}_total_under_odds'] = outcome['price']
+            
+            games.append(game_dict)
+        
+        return pd.DataFrame(games) if games else None
+        
     except Exception as e:
         st.error(f"❌ Error fetching odds: {str(e)}")
-        import traceback
-        st.code(traceback.format_exc())
         return None
 
 # NBA teams
@@ -472,23 +522,24 @@ def show_best_bets(models, selected_date):
             ]
             
             if len(game_odds) > 0:
-                # Get FanDuel/DraftKings odds (use first available)
-                fanduel_odds = game_odds[game_odds['bookmaker'] == 'fanduel']
-                draftkings_odds = game_odds[game_odds['bookmaker'] == 'draftkings']
-                pinnacle_odds = game_odds[game_odds['bookmaker'] == 'pinnacle']
+                row = game_odds.iloc[0]
                 
-                # Use FanDuel as primary, DraftKings as fallback
-                primary_odds = fanduel_odds if len(fanduel_odds) > 0 else draftkings_odds
+                # Get FanDuel odds (primary)
+                market_spread = row.get('fanduel_spread_home')
+                market_total = row.get('fanduel_total_line')
+                market_ml_home = row.get('fanduel_ml_home')
                 
-                if len(primary_odds) > 0:
-                    market_spread = primary_odds.iloc[0].get('spread_home')
-                    market_total = primary_odds.iloc[0].get('total_over')
-                    market_ml_home = primary_odds.iloc[0].get('ml_home')
+                # Fallback to DraftKings if FanDuel not available
+                if market_spread is None or pd.isna(market_spread):
+                    market_spread = row.get('draftkings_spread_home')
+                if market_total is None or pd.isna(market_total):
+                    market_total = row.get('draftkings_total_line')
+                if market_ml_home is None or pd.isna(market_ml_home):
+                    market_ml_home = row.get('draftkings_ml_home')
                 
                 # Get Pinnacle (sharp) odds
-                if len(pinnacle_odds) > 0:
-                    pinnacle_spread = pinnacle_odds.iloc[0].get('spread_home')
-                    pinnacle_total = pinnacle_odds.iloc[0].get('total_over')
+                pinnacle_spread = row.get('pinnacle_spread_home')
+                pinnacle_total = row.get('pinnacle_total_line')
         
         # Calculate edges for each bet type
         if market_spread is not None:
