@@ -173,16 +173,23 @@ def get_todays_games():
 def get_live_odds():
     """Fetch live odds from The Odds API"""
     if not ODDS_API_AVAILABLE:
+        st.error("❌ Odds API module not available")
         return None
     
     try:
         odds_data = fetch_nba_odds(use_cache=True)
         if odds_data:
+            st.success(f"✅ Fetched {len(odds_data)} games from Odds API")
             df = parse_odds_data(odds_data)
+            st.info(f"📊 Parsed into {len(df)} rows")
             return df
-        return None
+        else:
+            st.error("❌ Odds API returned empty data")
+            return None
     except Exception as e:
-        st.warning(f"Could not fetch odds: {e}")
+        st.error(f"❌ Error fetching odds: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
         return None
 
 # NBA teams
