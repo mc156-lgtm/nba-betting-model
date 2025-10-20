@@ -259,12 +259,39 @@ def main():
         st.info("Run the training scripts first: `cd src/models && python spread_model.py`")
         return
     
-    # Sidebar
-    st.sidebar.title("⚙️ Settings")
-    page = st.sidebar.radio("Navigate", ["📅 Today's Games", "🎯 Game Predictions", "👤 Player Props", "📊 Model Performance", "ℹ️ About"])
+    # Sidebar - Date Selector
+    st.sidebar.title("📅 Date Selection")
     
-    if page == "📅 Today's Games":
-        show_todays_games(models)
+    date_option = st.sidebar.radio(
+        "Select Date",
+        ["Today", "Tomorrow", "Custom Date"],
+        key="date_selector"
+    )
+    
+    if date_option == "Today":
+        selected_date = datetime.now()
+    elif date_option == "Tomorrow":
+        selected_date = datetime.now() + timedelta(days=1)
+    else:
+        selected_date = st.sidebar.date_input(
+            "Pick a date",
+            datetime.now(),
+            min_value=datetime.now() - timedelta(days=30),
+            max_value=datetime.now() + timedelta(days=14)
+        )
+        selected_date = datetime.combine(selected_date, datetime.min.time())
+    
+    st.sidebar.markdown(f"**Selected: {selected_date.strftime('%b %d, %Y')}**")
+    st.sidebar.markdown("---")
+    
+    # Sidebar - Navigation
+    st.sidebar.title("⚙️ Settings")
+    page = st.sidebar.radio("Navigate", ["🔥 Best Bets", "📅 Today's Games", "🎯 Game Predictions", "👤 Player Props", "📊 Model Performance", "ℹ️ About"])
+    
+    if page == "🔥 Best Bets":
+        show_best_bets(models, selected_date)
+    elif page == "📅 Today's Games":
+        show_todays_games(models, selected_date)
     elif page == "🎯 Game Predictions":
         show_game_predictions(models)
     elif page == "👤 Player Props":
@@ -274,10 +301,27 @@ def main():
     else:
         show_about()
 
-def show_todays_games(models):
-    """Show today's NBA schedule with predictions"""
-    st.header("📅 Today's NBA Games")
-    st.markdown(f"**{datetime.now().strftime('%A, %B %d, %Y')}**")
+def show_best_bets(models, selected_date):
+    """Show Best Bets Dashboard - Auto-ranked by Expected Value"""
+    st.header("🔥 Best Bets Dashboard")
+    st.markdown(f"**{selected_date.strftime('%A, %B %d, %Y')}**")
+    
+    st.info("🚧 Best Bets Dashboard coming soon! This will auto-rank all betting opportunities by Expected Value.")
+    st.markdown("""
+    **Features**:
+    - ✅ Auto-calculates edges for all games
+    - ✅ Ranks by Expected Value (EV%)
+    - ✅ Shows top 10 best bets
+    - ✅ Star ratings (⭐⭐⭐ = best value)
+    - ✅ Zero manual work needed!
+    
+    **Coming in next update!**
+    """)
+
+def show_todays_games(models, selected_date):
+    """Show NBA schedule with predictions for selected date"""
+    st.header("📅 NBA Games")
+    st.markdown(f"**{selected_date.strftime('%A, %B %d, %Y')}**")
     
     # Fetch today's games
     with st.spinner("Loading today's schedule..."):
