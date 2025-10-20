@@ -13,6 +13,13 @@ from datetime import datetime, timedelta
 import sys
 import os
 
+# Try to import NBA API for live schedule
+try:
+    from nba_api.live.nba.endpoints import scoreboard
+    NBA_API_AVAILABLE = True
+except:
+    NBA_API_AVAILABLE = False
+
 # Add src directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
@@ -101,6 +108,36 @@ def load_models():
     except Exception as e:
         st.error(f"Error loading models: {e}")
         return None
+
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def get_todays_games():
+    """Fetch today's NBA schedule from API"""
+    if not NBA_API_AVAILABLE:
+        return []
+    
+    try:
+        board = scoreboard.ScoreBoard()
+        games = board.games.get_dict()
+        
+        todays_games = []
+        for game in games:
+            game_info = {
+                'game_id': game['gameId'],
+                'game_time': game['gameTimeUTC'],
+                'home_team': game['homeTeam']['teamTricode'],
+                'home_team_name': game['homeTeam']['teamName'],
+                'away_team': game['awayTeam']['teamTricode'],
+                'away_team_name': game['awayTeam']['teamName'],
+                'game_status': game['gameStatusText'],
+                'home_score': game['homeTeam']['score'],
+                'away_score': game['awayTeam']['score'],
+            }
+            todays_games.append(game_info)
+        
+        return todays_games
+    except Exception as e:
+        st.warning(f"Could not fetch today's schedule: {e}")
+        return []
 
 # NBA teams
 NBA_TEAMS = [
@@ -224,9 +261,11 @@ def main():
     
     # Sidebar
     st.sidebar.title("⚙️ Settings")
-    page = st.sidebar.radio("Navigate", ["🎯 Game Predictions", "👤 Player Props", "📊 Model Performance", "ℹ️ About"])
+    page = st.sidebar.radio("Navigate", ["📅 Today's Games", "🎯 Game Predictions", "👤 Player Props", "📊 Model Performance", "ℹ️ About"])
     
-    if page == "🎯 Game Predictions":
+    if page == "📅 Today's Games":
+        show_todays_games(models)
+    elif page == "🎯 Game Predictions":
         show_game_predictions(models)
     elif page == "👤 Player Props":
         show_player_props(models)
@@ -234,6 +273,85 @@ def main():
         show_model_performance()
     else:
         show_about()
+
+def show_todays_games(models):
+    """Show today's NBA schedule with predictions"""
+    st.header("📅 Today's NBA Games")
+    st.markdown(f"**{datetime.now().strftime('%A, %B %d, %Y')}**")
+    
+    # Fetch today's games
+    with st.spinner("Loading today's schedule..."):
+        games = get_todays_games()
+    
+    if not games:
+        st.warning("⚠️ No games scheduled today or unable to fetch schedule.")
+        st.info("💡 Use the 'Game Predictions' tab to make custom predictions.")
+        return
+    
+    st.success(f"✅ Found {len(games)} game(s) today!")
+    st.markdown("---")
+    
+    # Generate predictions for all games
+    for i, game in enumerate(games, 1):
+        home_team = game['home_team']
+        away_team = game['away_team']
+        
+        with st.expander(f"🏀 Game {i}: {game['away_team_name']} @ {game['home_team_name']}", expanded=True):
+            col1, col2, col3 = st.columns([2, 1, 2])
+            
+            with col1:
+                st.markdown(f"### ✈️ {game['away_team_name']}")
+                st.markdown(f"**{away_team}**")
+                if game['away_score'] > 0:
+                    st.metric("Score", game['away_score'])
+            
+            with col2:
+                st.markdown("### VS")
+                st.markdown(f"**{game['game_status']}**")
+            
+            with col3:
+                st.markdown(f"### 🏠 {game['home_team_name']}")
+                st.markdown(f"**{home_team}**")
+                if game['home_score'] > 0:
+                    st.metric("Score", game['home_score'])
+            
+            # Generate predictions
+            predictions = predict_game(models, home_team, away_team)
+            
+            st.markdown("---")
+            
+            # Predictions in columns
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "🏆 Win Probability",
+                    f"{home_team} {predictions['home_win_prob']:.0f}%",
+                    f"{away_team} {predictions['away_win_prob']:.0f}%"
+                )
+            
+            with col2:
+                spread = predictions['spread']
+                if spread > 0:
+                    st.metric("📊 Spread", f"{home_team} -{spread}")
+                else:
+                    st.metric("📊 Spread", f"{away_team} -{abs(spread)}")
+            
+            with col3:
+                st.metric("🎯 Total", f"{predictions['total']:.1f}")
+                if predictions.get('adjusted'):
+                    st.caption(f"Raw: {predictions['total_raw']:.1f} + 10.8")
+            
+            with col4:
+                # Betting recommendation
+                if predictions['home_win_prob'] > 60:
+                    st.success(f"💡 Bet {home_team} ML")
+                elif predictions['away_win_prob'] > 60:
+                    st.success(f"💡 Bet {away_team} ML")
+                else:
+                    st.info("⚖️ Close game")
+            
+            st.markdown("---")
 
 def show_game_predictions(models):
     """Show game prediction interface"""
