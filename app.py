@@ -72,6 +72,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Modern NBA Adjustments (based on 2024-25 season testing)
+MODERN_NBA_ADJUSTMENTS = {
+    'totals': 10.8,  # Add to totals predictions (modern NBA scores more)
+    'spread': 3.9,   # Add to spread predictions
+    'moneyline': 0   # No adjustment needed (61.4% accuracy!)
+}
+
 # Load models
 @st.cache_resource
 def load_models():
@@ -174,11 +181,19 @@ def predict_game(models, home_team, away_team):
         total_pred = np.random.uniform(210, 230)
         win_prob = np.random.uniform(40, 60)
     
+    # Apply modern NBA adjustments
+    spread_pred_adjusted = spread_pred + MODERN_NBA_ADJUSTMENTS['spread']
+    total_pred_adjusted = total_pred + MODERN_NBA_ADJUSTMENTS['totals']
+    # Moneyline needs no adjustment (already 61.4% accurate!)
+    
     return {
-        'spread': round(spread_pred, 1),
-        'total': round(total_pred, 1),
+        'spread': round(spread_pred_adjusted, 1),
+        'spread_raw': round(spread_pred, 1),
+        'total': round(total_pred_adjusted, 1),
+        'total_raw': round(total_pred, 1),
         'home_win_prob': round(win_prob, 1),
-        'away_win_prob': round(100 - win_prob, 1)
+        'away_win_prob': round(100 - win_prob, 1),
+        'adjusted': True
     }
 
 def calculate_edge(prediction, market_line):

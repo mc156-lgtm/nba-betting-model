@@ -1,0 +1,9 @@
+{
+  "totals_mae": 17.558094024658203,
+  "totals_bias": -10.842918386049035,
+  "spread_mae": 17.558094024658203,
+  "spread_bias": -3.876664638519287,
+  "moneyline_accuracy": 0.6140808344198174,
+  "high_conf_accuracy": 0.6198945981554678,
+  "games_tested": 1534
+}
